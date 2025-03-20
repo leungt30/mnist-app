@@ -1,0 +1,6 @@
+#ignore venv
+venv/
+
+testing/
+
+.gitignore

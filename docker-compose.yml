@@ -1,0 +1,6 @@
+version: '1'
+services:
+  mnist:
+    image: mnist
+    ports: 
+    - "1313:5100" # default external port is 1313 inside service

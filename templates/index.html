@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>MNIST Model Classifier</title>
+    <style>
+      body {
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        font-family: Arial, sans-serif;
+        margin: 0;
+      }
+
+      .drop-zone {
+        border: 2px dashed #ccc;
+        padding: 20px;
+        width: 80vw;
+        max-width: 600px;
+        height: 80vh;
+        max-height: 600px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .drop-zone.dragover {
+        background-color: #f0f0f0;
+        border-color: #999;
+      }
+
+      #fileInput {
+        display: none;
+      }
+
+      .btn {
+        background-color: #4CAF50;
+        color: white;
+        padding: 10px 20px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 20px;
+      }
+
+      .btn:hover {
+        background-color: #45a049;
+      }
+
+      #classifiedDigit {
+        font-size: 4rem;
+        margin: 20px 0;
+        min-height: 80px;
+      }
+
+      #status {
+        color: #666;
+        margin-top: 10px;
+        min-height: 20px;
+      }
+      
+      .preview-image {
+        max-width: 150px;
+        max-height: 150px;
+        margin-top: 15px;
+        display: none;
+        border: 1px solid #ddd;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="dropZone" class="drop-zone">
+      <h1>MNIST Model Classifier</h1>
+      <p>Drop an image or click to upload</p>
+      
+      <input id="fileInput" type="file" name="file" accept="image/*" />
+      <button id="uploadBtn" class="btn" style="display: none;">Classify</button>
+      
+      <img id="imagePreview" class="preview-image" src="#" alt="Preview" />
+      <div id="status"></div>
+      
+      <h2>Your digit is:</h2>
+      <h1 id="classifiedDigit">?</h1>
+    </div>
+
+    <script>
+      // Change this to match your Flask server URL and external port
+      // const FLASK_SERVER_URL = "http://127.0.0.1:5100";
+      const FLASK_SERVER_URL = "http://127.0.0.1:" + {{port}}; // Flask variable ignore syntax errors
+      
+      let dropZone = document.getElementById("dropZone");
+      let fileInput = document.getElementById("fileInput");
+      let uploadBtn = document.getElementById("uploadBtn");
+      let classifiedDigitElement = document.getElementById('classifiedDigit');
+      let statusElement = document.getElementById('status');
+      let imagePreview = document.getElementById('imagePreview');
+
+      // Handle click on drop zone
+      dropZone.addEventListener("click", function(e) {
+        if (e.target !== uploadBtn) {
+          fileInput.click();
+        }
+      });
+
+      // Handle file selection
+      fileInput.addEventListener("change", function() {
+        if (fileInput.files.length > 0) {
+          uploadBtn.style.display = "inline-block";
+          statusElement.textContent = "File selected: " + fileInput.files[0].name;
+          
+          // Show image preview
+          const file = fileInput.files[0];
+          if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              imagePreview.src = e.target.result;
+              imagePreview.style.display = "block";
+            }
+            reader.readAsDataURL(file);
+          }
+        }
+      });
+
+      // Handle submit button click
+      uploadBtn.addEventListener("click", function(e) {
+        e.preventDefault();
+        if (fileInput.files.length > 0) {
+          uploadFile(fileInput.files[0]);
+        }
+      });
+
+      // Handle drag and drop events
+      dropZone.addEventListener("dragover", function(e) {
+        e.preventDefault();
+        this.classList.add("dragover");
+      });
+
+      dropZone.addEventListener("dragleave", function() {
+        this.classList.remove("dragover");
+      });
+
+      dropZone.addEventListener("drop", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.classList.remove("dragover");
+
+        if (e.dataTransfer.files.length > 0) {
+          const file = e.dataTransfer.files[0];
+          fileInput.files = e.dataTransfer.files;
+          statusElement.textContent = "File selected: " + file.name;
+          uploadBtn.style.display = "inline-block";
+          
+          // Show image preview
+          if (file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+              imagePreview.src = e.target.result;
+              imagePreview.style.display = "block";
+            }
+            reader.readAsDataURL(file);
+          }
+        }
+      });
+
+      // Function to upload file using AJAX
+      function uploadFile(file) {
+        let formData = new FormData();
+        formData.append('file', file);
+        
+        statusElement.textContent = "Classifying...";
+        classifiedDigitElement.textContent = "...";
+        
+        // Use the Flask server URL instead of relative path
+        fetch(`${FLASK_SERVER_URL}/`, {
+          method: 'POST',
+          body: formData,
+          // Don't set Content-Type header for FormData
+        })
+        .then(response => {
+          if (!response.ok) {
+            console.error("Response not OK:", response.status, response.statusText);
+            return response.text().then(text => {
+              console.log("Response body:", text);
+              try {
+                return JSON.parse(text);
+              } catch (e) {
+                throw new Error(`Server error (${response.status}): ${text || response.statusText}`);
+              }
+            });
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log("Received data:", data);
+          if (data.error) {
+            throw new Error(data.error);
+          }
+          classifiedDigitElement.textContent = data.class;
+          statusElement.textContent = "Classification complete! Confidence: " + (data.confidence*100).toFixed(2);
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          statusElement.textContent = "Error: " + error.message;
+          classifiedDigitElement.textContent = "?";
+        });
+      }
+    </script>
+  </body>
+</html>
